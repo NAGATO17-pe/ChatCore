@@ -1,0 +1,2 @@
+# ChatCore
+chat de whatsapp
