@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChatCore LAN</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f8; color: #17212b; }
+      .layout { display: grid; grid-template-columns: 320px 1fr; min-height: 100vh; }
+      aside { background: #fff; border-right: 1px solid #d9e1e8; padding: 1rem; }
+      main { display: flex; flex-direction: column; }
+      .panel { background: #fff; margin: 1rem; border: 1px solid #d9e1e8; border-radius: 10px; padding: 1rem; }
+      input, button { font-size: 1rem; padding: .6rem; }
+      input { width: 100%; box-sizing: border-box; margin-bottom: .5rem; }
+      button { cursor: pointer; border: 0; background: #2f80ed; color: white; border-radius: 8px; }
+      button:hover { background: #1f6ad1; }
+      #messages { list-style: none; padding: 0; margin: 0; max-height: 60vh; overflow: auto; }
+      #messages li { background: #eef3f8; margin-bottom: .4rem; padding: .5rem; border-radius: 6px; }
+      .meta { font-size: .8rem; color: #5b6b79; }
+      .row { display: flex; gap: .5rem; }
+      .sr-only { position:absolute; left:-10000px; }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside>
+        <h1>ChatCore</h1>
+        <label for="username">Tu usuario</label>
+        <input id="username" placeholder="ej. ana" aria-describedby="user-help" />
+        <p id="user-help">Usa minúsculas, sin espacios.</p>
+
+        <section class="panel" aria-labelledby="create-chat-title">
+          <h2 id="create-chat-title">Crear chat</h2>
+          <label for="chat-name">Nombre</label>
+          <input id="chat-name" placeholder="Proyecto A" />
+          <label for="chat-users">Participantes (coma)</label>
+          <input id="chat-users" placeholder="ana, luis" />
+          <button id="create-chat">Crear</button>
+        </section>
+
+        <section aria-labelledby="chat-list-title">
+          <h2 id="chat-list-title">Mis chats</h2>
+          <ul id="chat-list"></ul>
+        </section>
+      </aside>
+
+      <main>
+        <section class="panel" aria-labelledby="messages-title">
+          <h2 id="messages-title">Mensajes</h2>
+          <p id="active-chat">Selecciona un chat</p>
+          <ul id="messages" aria-live="polite"></ul>
+          <form id="message-form">
+            <label class="sr-only" for="message-input">Escribe un mensaje</label>
+            <div class="row">
+              <input id="message-input" maxlength="1000" placeholder="Escribe tu mensaje" required />
+              <button type="submit">Enviar</button>
+            </div>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      const socket = io();
+      const usernameInput = document.getElementById('username');
+      const chatList = document.getElementById('chat-list');
+      const messagesEl = document.getElementById('messages');
+      const activeChatText = document.getElementById('active-chat');
+      const msgForm = document.getElementById('message-form');
+      const msgInput = document.getElementById('message-input');
+      const chatNameInput = document.getElementById('chat-name');
+      const chatUsersInput = document.getElementById('chat-users');
+      let activeChatId = null;
+
+      function normalize(name) {
+        return (name || '').trim().replace(/\s+/g, '_').toLowerCase();
+      }
+
+      async function loadChats() {
+        const username = normalize(usernameInput.value);
+        if (!username) return;
+        const res = await fetch(`/api/chats?username=${encodeURIComponent(username)}`);
+        const chats = await res.json();
+        chatList.innerHTML = '';
+
+        chats.forEach((chat) => {
+          const li = document.createElement('li');
+          const button = document.createElement('button');
+          button.textContent = `${chat.name} (#${chat.id})`;
+          button.addEventListener('click', () => openChat(chat.id, chat.name));
+          li.appendChild(button);
+          chatList.appendChild(li);
+        });
+      }
+
+      async function openChat(chatId, chatName) {
+        activeChatId = chatId;
+        activeChatText.textContent = `Chat: ${chatName}`;
+        socket.emit('join_chat', { chatId });
+
+        const res = await fetch(`/api/chats/${chatId}/messages`);
+        const messages = await res.json();
+        messagesEl.innerHTML = '';
+        messages.forEach(renderMessage);
+      }
+
+      function renderMessage(message) {
+        const li = document.createElement('li');
+        li.innerHTML = `<strong>${message.sender.username}</strong>: ${message.content}<div class="meta">${new Date(message.createdAt).toLocaleString()}</div>`;
+        messagesEl.appendChild(li);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      document.getElementById('create-chat').addEventListener('click', async () => {
+        const name = chatNameInput.value.trim();
+        const creator = normalize(usernameInput.value);
+        const extra = chatUsersInput.value.split(',').map(normalize).filter(Boolean);
+        const participants = [...new Set([creator, ...extra])];
+
+        const res = await fetch('/api/chats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, participants })
+        });
+
+        if (!res.ok) {
+          alert('Error creando chat');
+          return;
+        }
+
+        chatNameInput.value = '';
+        chatUsersInput.value = '';
+        await loadChats();
+      });
+
+      msgForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!activeChatId) return;
+        socket.emit('send_message', {
+          chatId: activeChatId,
+          sender: normalize(usernameInput.value),
+          content: msgInput.value
+        });
+        msgInput.value = '';
+      });
+
+      socket.on('new_message', (message) => {
+        if (Number(message.chatId) === Number(activeChatId)) {
+          renderMessage(message);
+        }
+      });
+
+      socket.on('chat_error', (err) => alert(err.message));
+
+      usernameInput.addEventListener('change', loadChats);
+    </script>
+  </body>
+</html>
