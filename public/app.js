@@ -32,7 +32,6 @@ function toggleSidebar() {
 }
 
 function openModal() {
-  createModal.hidden = false;
   createModal.classList.add('show');
   createModal.setAttribute('aria-hidden', 'false');
   chatNameInput.focus();
@@ -41,7 +40,6 @@ function openModal() {
 function closeModal() {
   createModal.classList.remove('show');
   createModal.setAttribute('aria-hidden', 'true');
-  createModal.hidden = true;
 }
 
 function markSelected(chatId) {
