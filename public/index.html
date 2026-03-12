@@ -24,6 +24,7 @@
           <input id="search-chats" placeholder="Buscar..." />
 
           <ul id="chat-list" class="chat-list"></ul>
+          <p id="empty-chat-list" class="empty-note">No hay chats todavía.</p>
           <p id="empty-chat-list" style="margin:0;color:#d2e6e7;font-size:.82rem;">No hay chats todavía.</p>
         </div>
       </aside>
@@ -31,6 +32,8 @@
       <main class="main">
         <header class="top">
           <div class="top-left">
+            <button id="toggle-sidebar-top" class="btn icon-btn" type="button" title="Ocultar panel">☰</button>
+            <div class="avatar small"></div>
             <button id="toggle-sidebar-top" class="btn" type="button">☰</button>
             <div class="avatar" style="width:38px;height:38px;"></div>
             <div>
@@ -94,11 +97,20 @@
     <div id="create-chat-modal" class="modal-backdrop" aria-hidden="true">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <header>
-          <h3 id="modal-title" style="margin:0;">Crear nuevo chat</h3>
+          <h3 id="modal-title">Crear nuevo chat</h3>
           <button id="close-modal" class="btn" type="button">✕</button>
         </header>
 
         <div class="modal-content">
+          <label for="chat-name">Nombre del chat</label>
+          <input id="chat-name" placeholder="Marketing Group" />
+
+          <label for="chat-users">Participantes (coma)</label>
+          <input id="chat-users" placeholder="ana, luis, maria" />
+
+          <div class="actions">
+            <button id="cancel-create-chat" class="btn" type="button">Cancelar</button>
+            <button id="create-chat" class="btn btn-main" type="button">Crear</button>
           <label for="chat-name" style="display:block;margin-bottom:.3rem;color:var(--muted);">Nombre del chat</label>
           <input id="chat-name" placeholder="Marketing Group" />
 
