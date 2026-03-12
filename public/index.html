@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChatCore</title>
+    <link rel="stylesheet" href="/styles.css?v=2" />
+  </head>
+  <body>
+    <div id="layout" class="layout">
+      <aside class="sidebar" aria-label="Barra lateral">
+        <div class="rail">
+          <div class="avatar" aria-hidden="true"></div>
+          <button id="toggle-sidebar-left" class="rail-btn" type="button" title="Ocultar sidebar">☰</button>
+          <button class="rail-btn" type="button" aria-hidden="true">💬</button>
+        </div>
+
+        <div class="sidebar-content">
+          <label for="username">Tu usuario</label>
+          <input id="username" placeholder="ej. ana" />
+          <button id="refresh-chats" class="btn btn-ghost" type="button">Actualizar chats</button>
+
+          <label for="search-chats">Buscar chat</label>
+          <input id="search-chats" placeholder="Buscar..." />
+
+          <ul id="chat-list" class="chat-list"></ul>
+          <p id="empty-chat-list" class="empty-note">No hay chats todavía.</p>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="top">
+          <div class="top-left">
+            <button id="toggle-sidebar-top" class="btn icon-btn" type="button" title="Ocultar sidebar">☰</button>
+            <div class="avatar small" aria-hidden="true"></div>
+            <div>
+              <h1 id="chat-title">Project Team</h1>
+              <p id="active-chat">Selecciona un chat para comenzar</p>
+            </div>
+          </div>
+
+          <button id="open-create-chat-modal" class="btn btn-main" type="button">Create Chat</button>
+        </header>
+
+        <section class="chat-canvas">
+          <ul id="messages" class="messages" aria-live="polite"></ul>
+
+          <form id="message-form" class="composer">
+            <label class="sr-only" for="message-input">Escribe un mensaje</label>
+            <input id="message-input" maxlength="1000" placeholder="Type your message..." required />
+            <button type="submit" class="btn btn-main">➤</button>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <div id="create-chat-modal" class="modal-backdrop" aria-hidden="true" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <header>
+          <h3 id="modal-title">Crear nuevo chat</h3>
+          <button id="close-modal" class="btn" type="button">✕</button>
+        </header>
+
+        <div class="modal-content">
+          <label for="chat-name">Nombre del chat</label>
+          <input id="chat-name" placeholder="Marketing Group" />
+
+          <label for="chat-users">Participantes (coma)</label>
+          <input id="chat-users" placeholder="ana, luis, maria" />
+
+          <div class="actions">
+            <button id="cancel-create-chat" class="btn" type="button">Cancelar</button>
+            <button id="create-chat" class="btn btn-main" type="button">Crear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/app.js?v=2" type="module"></script>
+  </body>
+</html>
