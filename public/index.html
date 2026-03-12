@@ -25,6 +25,7 @@
 
           <ul id="chat-list" class="chat-list"></ul>
           <p id="empty-chat-list" class="empty-note">No hay chats todavía.</p>
+          <p id="empty-chat-list" style="margin:0;color:#d2e6e7;font-size:.82rem;">No hay chats todavía.</p>
         </div>
       </aside>
 
@@ -33,6 +34,8 @@
           <div class="top-left">
             <button id="toggle-sidebar-top" class="btn icon-btn" type="button" title="Ocultar panel">☰</button>
             <div class="avatar small"></div>
+            <button id="toggle-sidebar-top" class="btn" type="button">☰</button>
+            <div class="avatar" style="width:38px;height:38px;"></div>
             <div>
               <h1 id="chat-title">Project Team</h1>
               <p id="active-chat">Selecciona un chat para comenzar</p>
@@ -43,12 +46,49 @@
         </header>
 
         <section class="chat-body">
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand-block">
+          <h1>ChatCore</h1>
+          <p>Mensajería local con estilo premium</p>
+        </div>
+
+        <div class="sidebar-content">
+          <section class="card">
+            <label for="username">Usuario</label>
+            <input id="username" placeholder="ej. ana" aria-describedby="user-help" />
+            <p id="user-help" class="hint">En minúsculas y sin espacios.</p>
+            <button id="refresh-chats" class="btn btn-ghost" type="button">Actualizar chats</button>
+          </section>
+
+          <section class="card" aria-labelledby="chat-list-title">
+            <h2 id="chat-list-title">Tus conversaciones</h2>
+            <p id="empty-chat-list" class="empty-state">No hay chats todavía. Crea uno para comenzar.</p>
+            <ul id="chat-list" class="chat-list"></ul>
+          </section>
+
+          <button id="open-create-chat-modal" class="btn btn-primary" type="button">+ Nuevo chat</button>
+        </div>
+      </aside>
+
+      <main class="chat-panel">
+        <header class="chat-header">
+          <div>
+            <h2>Conversación</h2>
+            <p id="active-chat">Selecciona un chat para comenzar</p>
+          </div>
+          <button id="open-create-chat-modal-2" class="btn btn-ghost" type="button">Crear chat</button>
+        </header>
+
+        <section class="conversation">
           <ul id="messages" class="messages" aria-live="polite"></ul>
 
           <form id="message-form" class="composer">
             <label class="sr-only" for="message-input">Escribe un mensaje</label>
             <input id="message-input" maxlength="1000" placeholder="Type a message..." required />
             <button type="submit" class="btn btn-main">➤</button>
+            <input id="message-input" maxlength="1000" placeholder="Escribe tu mensaje" required />
+            <button type="submit" class="btn btn-primary">Enviar</button>
           </form>
         </section>
       </main>
@@ -71,6 +111,30 @@
           <div class="actions">
             <button id="cancel-create-chat" class="btn" type="button">Cancelar</button>
             <button id="create-chat" class="btn btn-main" type="button">Crear</button>
+          <label for="chat-name" style="display:block;margin-bottom:.3rem;color:var(--muted);">Nombre del chat</label>
+          <input id="chat-name" placeholder="Marketing Group" />
+
+          <label for="chat-users" style="display:block;margin:.5rem 0 .3rem;color:var(--muted);">Participantes (coma)</label>
+          <input id="chat-users" placeholder="ana, luis, maria" />
+
+          <div class="actions" style="margin-top:.6rem;">
+            <button id="cancel-create-chat" class="btn" type="button">Cancelar</button>
+            <button id="create-chat" class="btn btn-main" type="button">Crear</button>
+          <h3 id="modal-title">Crear nuevo chat</h3>
+          <button id="close-modal" class="icon-btn" type="button" aria-label="Cerrar modal">✕</button>
+        </header>
+        <div class="modal-content">
+          <label for="chat-name">Nombre del chat</label>
+          <input id="chat-name" placeholder="Equipo diseño" />
+
+          <label for="chat-users">Participantes (separados por coma)</label>
+          <input id="chat-users" placeholder="ana, luis, maria" />
+
+          <p class="hint">Tu usuario se agrega automáticamente si no aparece en la lista.</p>
+
+          <div class="modal-actions">
+            <button id="cancel-create-chat" class="btn btn-ghost" type="button">Cancelar</button>
+            <button id="create-chat" class="btn btn-primary" type="button">Crear chat</button>
           </div>
         </div>
       </div>
