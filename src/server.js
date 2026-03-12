@@ -104,18 +104,27 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const user = await getOrCreateUser(username);
+    try {
+      const user = await getOrCreateUser(username);
 
-    const message = await prisma.message.create({
-      data: {
+      const message = await prisma.message.create({
+        data: {
+          chatId: chatIdNum,
+          senderId: user.id,
+          content: content.trim()
+        },
+        include: { sender: true }
+      });
+
+      io.to(`chat:${chatIdNum}`).emit('new_message', message);
+    } catch (error) {
+      socket.emit('chat_error', { message: 'No se pudo guardar el mensaje.' });
+      console.error('send_message error', {
         chatId: chatIdNum,
-        senderId: user.id,
-        content: content.trim()
-      },
-      include: { sender: true }
-    });
-
-    io.to(`chat:${chatIdNum}`).emit('new_message', message);
+        username,
+        error
+      });
+    }
   });
 });
 
