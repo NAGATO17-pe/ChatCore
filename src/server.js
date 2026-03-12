@@ -104,18 +104,22 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const user = await getOrCreateUser(username);
+    try {
+      const user = await getOrCreateUser(username);
 
-    const message = await prisma.message.create({
-      data: {
-        chatId: chatIdNum,
-        senderId: user.id,
-        content: content.trim()
-      },
-      include: { sender: true }
-    });
+      const message = await prisma.message.create({
+        data: {
+          chatId: chatIdNum,
+          senderId: user.id,
+          content: content.trim()
+        },
+        include: { sender: true }
+      });
 
-    io.to(`chat:${chatIdNum}`).emit('new_message', message);
+      io.to(`chat:${chatIdNum}`).emit('new_message', message);
+    } catch {
+      socket.emit('chat_error', { message: 'no se pudo enviar el mensaje' });
+    }
   });
 });
 

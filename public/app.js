@@ -108,7 +108,17 @@ function renderMessage(message) {
   const li = document.createElement('li');
   const self = normalize(usernameInput.value);
   li.className = `message ${message.sender.username === self ? 'outgoing' : ''}`;
-  li.innerHTML = `<strong>${message.sender.username}</strong>: ${message.content}<div class="meta">${new Date(message.createdAt).toLocaleString()}</div>`;
+
+  const senderStrong = document.createElement('strong');
+  senderStrong.textContent = message.sender.username;
+
+  const contentText = document.createTextNode(`: ${message.content}`);
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  meta.textContent = new Date(message.createdAt).toLocaleString();
+
+  li.append(senderStrong, contentText, meta);
   messagesEl.appendChild(li);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
