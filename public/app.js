@@ -16,6 +16,10 @@ const toast = document.getElementById('toast');
 
 let activeChatId = null;
 let chatsCache = [];
+<<<<<<< HEAD
+let toastTimer = null;
+=======
+>>>>>>> origin/main
 
 function normalize(name) {
   return (name || '').trim().replace(/\s+/g, '_').toLowerCase();
@@ -24,7 +28,12 @@ function normalize(name) {
 function showToast(message) {
   toast.textContent = message;
   toast.classList.add('show');
+<<<<<<< HEAD
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+=======
   setTimeout(() => toast.classList.remove('show'), 2200);
+>>>>>>> origin/main
 }
 
 function toggleSidebar() {
@@ -32,6 +41,10 @@ function toggleSidebar() {
 }
 
 function openModal() {
+<<<<<<< HEAD
+  createModal.hidden = false;
+=======
+>>>>>>> origin/main
   createModal.classList.add('show');
   createModal.setAttribute('aria-hidden', 'false');
   chatNameInput.focus();
@@ -40,6 +53,10 @@ function openModal() {
 function closeModal() {
   createModal.classList.remove('show');
   createModal.setAttribute('aria-hidden', 'true');
+<<<<<<< HEAD
+  createModal.hidden = true;
+=======
+>>>>>>> origin/main
 }
 
 function markSelected(chatId) {
@@ -97,7 +114,11 @@ async function openChat(chatId, chatName) {
   messagesEl.innerHTML = '';
 
   if (!Array.isArray(messages) || messages.length === 0) {
+<<<<<<< HEAD
+    messagesEl.innerHTML = '<li class="message system-hint">Aún no hay mensajes en este chat.</li>';
+=======
     messagesEl.innerHTML = '<li class="message">Aún no hay mensajes en este chat.</li>';
+>>>>>>> origin/main
     return;
   }
 
@@ -119,11 +140,27 @@ async function createChat() {
   const extra = chatUsersInput.value.split(',').map(normalize).filter(Boolean);
   const participants = [...new Set([creator, ...extra])];
 
+<<<<<<< HEAD
+  if (!creator) {
+    showToast('Primero define tu usuario.');
+    return;
+  }
+
+=======
+>>>>>>> origin/main
   if (!name) {
     showToast('El chat necesita un nombre.');
     return;
   }
 
+<<<<<<< HEAD
+  if (participants.length < 2) {
+    showToast('Agrega al menos otro participante.');
+    return;
+  }
+
+=======
+>>>>>>> origin/main
   const res = await fetch('/api/chats', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -149,10 +186,20 @@ msgForm.addEventListener('submit', (e) => {
     return;
   }
 
+<<<<<<< HEAD
+  const content = msgInput.value.trim();
+  if (!content) return;
+
+  socket.emit('send_message', {
+    chatId: activeChatId,
+    sender: normalize(usernameInput.value),
+    content
+=======
   socket.emit('send_message', {
     chatId: activeChatId,
     sender: normalize(usernameInput.value),
     content: msgInput.value
+>>>>>>> origin/main
   });
 
   msgInput.value = '';
