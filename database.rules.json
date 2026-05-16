@@ -1,0 +1,19 @@
+{
+  "rules": {
+    "messages": {
+      "$chatId": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        "$messageId": {
+          ".validate": "newData.hasChildren(['senderId','senderName','content','createdAt']) && newData.child('content').isString() && newData.child('content').val().length <= 1000 && newData.child('senderId').val() == auth.uid"
+        }
+      }
+    },
+    "presence": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth.uid == $uid"
+      }
+    }
+  }
+}

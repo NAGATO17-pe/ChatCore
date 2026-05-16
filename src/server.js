@@ -4,7 +4,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import morgan from 'morgan';
 import { Server } from 'socket.io';
-import { prisma, getOrCreateUser } from './db.js';
+import { requireAuth, socketAuthMiddleware } from './middleware/auth.js';
+import {
+  getOrCreateUser,
+  getUserByDisplayName,
+  getChatsForUser,
+  createChat,
+  getMessages,
+  saveMessage,
+} from './db.js';
 import { isValidMessage, normalizeUsername } from './validation.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -25,105 +33,99 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
 });
 
-app.get('/api/chats', async (req, res) => {
-  const username = normalizeUsername(req.query.username);
-  if (!username) return res.status(400).json({ error: 'username requerido' });
-
-  const chats = await prisma.chat.findMany({
-    where: {
-      participants: {
-        some: {
-          user: { username }
-        }
-      }
-    },
-    include: {
-      participants: { include: { user: true } }
-    },
-    orderBy: { createdAt: 'desc' }
+// Returns the public Firebase JS SDK config (safe to expose)
+app.get('/api/firebase-config', (_req, res) => {
+  res.json({
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID,
+    databaseURL: process.env.FIREBASE_DATABASE_URL,
   });
-
-  res.json(chats);
 });
 
-app.post('/api/chats', async (req, res) => {
+app.get('/api/chats', requireAuth, async (req, res) => {
+  try {
+    const { uid, name, email, picture } = req.firebaseUser;
+    await getOrCreateUser(uid, name || email, email, picture);
+    const chats = await getChatsForUser(uid);
+    res.json(chats);
+  } catch (error) {
+    console.error('GET /api/chats error', error);
+    res.status(500).json({ error: 'Error al obtener chats' });
+  }
+});
+
+app.post('/api/chats', requireAuth, async (req, res) => {
   const name = (req.body.name || '').trim();
   const rawParticipants = Array.isArray(req.body.participants) ? req.body.participants : [];
-  const participants = [...new Set(rawParticipants.map(normalizeUsername).filter(Boolean))];
 
   if (!name) return res.status(400).json({ error: 'nombre de chat requerido' });
-  if (participants.length < 2) {
-    return res.status(400).json({ error: 'requiere al menos 2 participantes' });
+
+  const creatorUid = req.firebaseUser.uid;
+  const participantNames = [...new Set(rawParticipants.map(normalizeUsername).filter(Boolean))];
+  const participantUsers = await Promise.all(participantNames.map((n) => getUserByDisplayName(n)));
+
+  const participantUids = [...new Set([
+    creatorUid,
+    ...participantUsers.filter(Boolean).map((u) => u.id),
+  ])];
+
+  if (participantUids.length < 2) {
+    return res.status(400).json({ error: 'requiere al menos 2 participantes válidos' });
   }
 
-  const users = await Promise.all(participants.map((username) => getOrCreateUser(username)));
-
-  const chat = await prisma.chat.create({
-    data: {
-      name,
-      participants: {
-        create: users.map((u) => ({ userId: u.id }))
-      }
-    },
-    include: {
-      participants: { include: { user: true } }
-    }
-  });
-
-  res.status(201).json(chat);
+  try {
+    const chat = await createChat(name, participantUids);
+    res.status(201).json(chat);
+  } catch (error) {
+    console.error('POST /api/chats error', error);
+    res.status(500).json({ error: 'Error al crear chat' });
+  }
 });
 
-app.get('/api/chats/:chatId/messages', async (req, res) => {
-  const chatId = Number(req.params.chatId);
-  if (Number.isNaN(chatId)) return res.status(400).json({ error: 'chatId inválido' });
+app.get('/api/chats/:chatId/messages', requireAuth, async (req, res) => {
+  const { chatId } = req.params;
+  if (!chatId) return res.status(400).json({ error: 'chatId inválido' });
 
-  const messages = await prisma.message.findMany({
-    where: { chatId },
-    include: { sender: true },
-    orderBy: { createdAt: 'asc' },
-    take: 500
-  });
-
-  res.json(messages);
+  try {
+    const messages = await getMessages(chatId);
+    res.json(messages);
+  } catch (error) {
+    console.error('GET /api/chats/:chatId/messages error', error);
+    res.status(500).json({ error: 'Error al obtener mensajes' });
+  }
 });
+
+io.use(socketAuthMiddleware);
 
 io.on('connection', (socket) => {
-  socket.on('join_chat', async ({ chatId }) => {
-    const chatIdNum = Number(chatId);
-    if (!Number.isNaN(chatIdNum)) {
-      socket.join(`chat:${chatIdNum}`);
-    }
+  socket.on('join_chat', ({ chatId }) => {
+    if (chatId) socket.join(`chat:${chatId}`);
   });
 
-  socket.on('send_message', async ({ chatId, sender, content }) => {
-    const chatIdNum = Number(chatId);
-    const username = normalizeUsername(sender);
-
-    if (Number.isNaN(chatIdNum) || !username || !isValidMessage(content)) {
+  socket.on('send_message', async ({ chatId, content }) => {
+    if (!chatId || !isValidMessage(content)) {
       socket.emit('chat_error', { message: 'mensaje inválido' });
       return;
     }
 
     try {
-      const user = await getOrCreateUser(username);
+      const { uid, name, email } = socket.firebaseUser;
+      const senderName = name || email || uid;
 
-      const message = await prisma.message.create({
-        data: {
-          chatId: chatIdNum,
-          senderId: user.id,
-          content: content.trim()
-        },
-        include: { sender: true }
+      const message = await saveMessage(chatId, {
+        senderId: uid,
+        senderName,
+        content: content.trim(),
       });
 
-      io.to(`chat:${chatIdNum}`).emit('new_message', message);
+      io.to(`chat:${chatId}`).emit('new_message', message);
     } catch (error) {
       socket.emit('chat_error', { message: 'No se pudo guardar el mensaje.' });
-      console.error('send_message error', {
-        chatId: chatIdNum,
-        username,
-        error
-      });
+      console.error('send_message error', error);
     }
   });
 });
@@ -133,7 +135,6 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`ChatCore escuchando en http://0.0.0.0:${port}`);
 });
 
-process.on('SIGINT', async () => {
-  await prisma.$disconnect();
+process.on('SIGINT', () => {
   process.exit(0);
 });
