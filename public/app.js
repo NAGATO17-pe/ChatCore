@@ -1,6 +1,25 @@
-const socket = window.io ? io() : { emit() {}, on() {} };
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js';
+import {
+  getAuth,
+  signInWithPopup,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signOut,
+} from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js';
+import {
+  getDatabase,
+  ref as dbRef,
+  onChildAdded,
+  off,
+} from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-database.js';
+
+// UI elements
+const authSection = document.getElementById('auth-section');
+const appSection = document.getElementById('app-section');
 const layout = document.getElementById('layout');
-const usernameInput = document.getElementById('username');
+const signInBtn = document.getElementById('sign-in-btn');
+const signOutBtn = document.getElementById('sign-out-btn');
+const userDisplayEl = document.getElementById('user-display');
 const searchChatsInput = document.getElementById('search-chats');
 const chatList = document.getElementById('chat-list');
 const emptyChatList = document.getElementById('empty-chat-list');
@@ -14,12 +33,13 @@ const chatUsersInput = document.getElementById('chat-users');
 const createModal = document.getElementById('create-chat-modal');
 const toast = document.getElementById('toast');
 
+let auth, rtdbClient;
+let currentUser = null;
+let socket = { emit() {}, on() {} };
 let activeChatId = null;
 let chatsCache = [];
-<<<<<<< HEAD
 let toastTimer = null;
-=======
->>>>>>> origin/main
+let rtdbActiveRef = null;
 
 function normalize(name) {
   return (name || '').trim().replace(/\s+/g, '_').toLowerCase();
@@ -28,12 +48,8 @@ function normalize(name) {
 function showToast(message) {
   toast.textContent = message;
   toast.classList.add('show');
-<<<<<<< HEAD
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
-=======
-  setTimeout(() => toast.classList.remove('show'), 2200);
->>>>>>> origin/main
 }
 
 function toggleSidebar() {
@@ -41,10 +57,7 @@ function toggleSidebar() {
 }
 
 function openModal() {
-<<<<<<< HEAD
   createModal.hidden = false;
-=======
->>>>>>> origin/main
   createModal.classList.add('show');
   createModal.setAttribute('aria-hidden', 'false');
   chatNameInput.focus();
@@ -53,15 +66,12 @@ function openModal() {
 function closeModal() {
   createModal.classList.remove('show');
   createModal.setAttribute('aria-hidden', 'true');
-<<<<<<< HEAD
   createModal.hidden = true;
-=======
->>>>>>> origin/main
 }
 
 function markSelected(chatId) {
   chatList.querySelectorAll('button').forEach((btn) => {
-    btn.classList.toggle('active', Number(btn.dataset.chatId) === Number(chatId));
+    btn.classList.toggle('active', btn.dataset.chatId === chatId);
   });
 }
 
@@ -89,55 +99,75 @@ function renderChatList(chats) {
   if (activeChatId) markSelected(activeChatId);
 }
 
-async function loadChats() {
-  const username = normalize(usernameInput.value);
-  if (!username) {
-    showToast('Primero escribe tu usuario.');
-    return;
-  }
+async function getAuthHeaders() {
+  if (!currentUser) return {};
+  const token = await currentUser.getIdToken();
+  return { Authorization: `Bearer ${token}` };
+}
 
-  const res = await fetch(`/api/chats?username=${encodeURIComponent(username)}`);
+async function loadChats() {
+  if (!currentUser) return;
+
+  const headers = await getAuthHeaders();
+  const res = await fetch('/api/chats', { headers });
+  if (!res.ok) { showToast('Error al cargar chats.'); return; }
   const chats = await res.json();
   chatsCache = Array.isArray(chats) ? chats : [];
   renderChatList(chatsCache);
 }
 
 async function openChat(chatId, chatName) {
+  // Detach previous RTDB listener
+  if (rtdbActiveRef) {
+    off(rtdbActiveRef);
+    rtdbActiveRef = null;
+  }
+
   activeChatId = chatId;
   chatTitle.textContent = chatName;
   activeChatText.textContent = 'Active now';
   markSelected(chatId);
   socket.emit('join_chat', { chatId });
 
-  const res = await fetch(`/api/chats/${chatId}/messages`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`/api/chats/${chatId}/messages`, { headers });
   const messages = await res.json();
   messagesEl.innerHTML = '';
 
   if (!Array.isArray(messages) || messages.length === 0) {
-<<<<<<< HEAD
     messagesEl.innerHTML = '<li class="message system-hint">Aún no hay mensajes en este chat.</li>';
-=======
-    messagesEl.innerHTML = '<li class="message">Aún no hay mensajes en este chat.</li>';
->>>>>>> origin/main
-    return;
+  } else {
+    messages.forEach(renderMessage);
   }
 
-  messages.forEach(renderMessage);
+  // Subscribe to RTDB for real-time new messages
+  if (rtdbClient) {
+    const msgRef = dbRef(rtdbClient, `messages/${chatId}`);
+    rtdbActiveRef = msgRef;
+    onChildAdded(msgRef, (snap) => {
+      const msg = { id: snap.key, ...snap.val() };
+      if (msg.chatId !== activeChatId) return;
+      if (messagesEl.querySelector(`[data-msg-id="${msg.id}"]`)) return;
+      renderMessage(msg);
+    });
+  }
 }
 
 function renderMessage(message) {
   const li = document.createElement('li');
-  const self = normalize(usernameInput.value);
-  li.className = `message ${message.sender.username === self ? 'outgoing' : ''}`;
+  const senderName = message.senderName || message.sender?.username || 'unknown';
+  const isSelf = currentUser && message.senderId === currentUser.uid;
+  li.className = `message ${isSelf ? 'outgoing' : ''}`;
+  if (message.id) li.dataset.msgId = message.id;
 
   const senderEl = document.createElement('strong');
-  senderEl.textContent = message.sender.username;
+  senderEl.textContent = senderName;
 
   const contentEl = document.createTextNode(`: ${message.content}`);
 
   const metaEl = document.createElement('div');
   metaEl.className = 'meta';
-  metaEl.textContent = new Date(message.createdAt).toLocaleString();
+  metaEl.textContent = new Date(message.createdAt || Date.now()).toLocaleString();
 
   li.append(senderEl, contentEl, metaEl);
   messagesEl.appendChild(li);
@@ -146,35 +176,16 @@ function renderMessage(message) {
 
 async function createChat() {
   const name = chatNameInput.value.trim();
-  const creator = normalize(usernameInput.value);
   const extra = chatUsersInput.value.split(',').map(normalize).filter(Boolean);
-  const participants = [...new Set([creator, ...extra])];
 
-<<<<<<< HEAD
-  if (!creator) {
-    showToast('Primero define tu usuario.');
-    return;
-  }
+  if (!name) { showToast('El chat necesita un nombre.'); return; }
+  if (extra.length === 0) { showToast('Agrega al menos otro participante.'); return; }
 
-=======
->>>>>>> origin/main
-  if (!name) {
-    showToast('El chat necesita un nombre.');
-    return;
-  }
-
-<<<<<<< HEAD
-  if (participants.length < 2) {
-    showToast('Agrega al menos otro participante.');
-    return;
-  }
-
-=======
->>>>>>> origin/main
+  const headers = await getAuthHeaders();
   const res = await fetch('/api/chats', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, participants })
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({ name, participants: extra }),
   });
 
   if (!res.ok) {
@@ -189,50 +200,74 @@ async function createChat() {
   await loadChats();
 }
 
-msgForm.addEventListener('submit', (e) => {
-  e.preventDefault();
-  if (!activeChatId) {
-    showToast('Selecciona un chat antes de enviar.');
-    return;
+async function initSocket() {
+  if (!currentUser || !window.io) return;
+  const token = await currentUser.getIdToken();
+  socket = window.io({ auth: { token }, transports: ['websocket', 'polling'] });
+  socket.on('new_message', (message) => {
+    if (message.chatId !== activeChatId) return;
+    if (messagesEl.querySelector(`[data-msg-id="${message.id}"]`)) return;
+    renderMessage(message);
+  });
+  socket.on('chat_error', (err) => showToast(err.message || 'Error en chat'));
+}
+
+async function handleAuthStateChange(user) {
+  currentUser = user;
+  if (user) {
+    authSection.hidden = true;
+    appSection.hidden = false;
+    userDisplayEl.textContent = user.displayName || user.email;
+    await initSocket();
+    await loadChats();
+  } else {
+    authSection.hidden = false;
+    appSection.hidden = true;
+    socket = { emit() {}, on() {} };
+    if (rtdbActiveRef) { off(rtdbActiveRef); rtdbActiveRef = null; }
+    activeChatId = null;
   }
+}
 
-<<<<<<< HEAD
-  const content = msgInput.value.trim();
-  if (!content) return;
+async function init() {
+  const res = await fetch('/api/firebase-config');
+  const config = await res.json();
+  const firebaseApp = initializeApp(config);
+  auth = getAuth(firebaseApp);
+  rtdbClient = getDatabase(firebaseApp);
 
-  socket.emit('send_message', {
-    chatId: activeChatId,
-    sender: normalize(usernameInput.value),
-    content
-=======
-  socket.emit('send_message', {
-    chatId: activeChatId,
-    sender: normalize(usernameInput.value),
-    content: msgInput.value
->>>>>>> origin/main
+  onAuthStateChanged(auth, handleAuthStateChange);
+
+  signInBtn?.addEventListener('click', async () => {
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    } catch (err) {
+      showToast('Error al iniciar sesión.');
+      console.error(err);
+    }
   });
 
+  signOutBtn?.addEventListener('click', async () => {
+    await signOut(auth);
+    showToast('Sesión cerrada.');
+  });
+}
+
+msgForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!activeChatId) { showToast('Selecciona un chat antes de enviar.'); return; }
+  const content = msgInput.value.trim();
+  if (!content) return;
+  socket.emit('send_message', { chatId: activeChatId, content });
   msgInput.value = '';
-});
-
-socket.on('new_message', (message) => {
-  if (Number(message.chatId) === Number(activeChatId)) renderMessage(message);
-});
-
-socket.on('chat_error', (err) => {
-  showToast(err.message || 'Error en chat');
 });
 
 searchChatsInput.addEventListener('input', () => {
   const term = searchChatsInput.value.trim().toLowerCase();
-  if (!term) {
-    renderChatList(chatsCache);
-    return;
-  }
+  if (!term) { renderChatList(chatsCache); return; }
   renderChatList(chatsCache.filter((chat) => chat.name.toLowerCase().includes(term)));
 });
 
-usernameInput.addEventListener('change', loadChats);
 document.getElementById('refresh-chats').addEventListener('click', loadChats);
 document.getElementById('open-create-chat-modal').addEventListener('click', openModal);
 document.getElementById('create-chat').addEventListener('click', createChat);
@@ -250,3 +285,5 @@ window.addEventListener('keydown', (event) => {
     closeModal();
   }
 });
+
+init().catch(console.error);
